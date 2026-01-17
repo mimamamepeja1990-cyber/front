@@ -1,26 +1,48 @@
+//* ============================================================
+   CONFIG
+============================================================ */
+
 const API_BASE = 'https://backend-0lcs.onrender.com';
 const PRODUCTS_ENDPOINT = `${API_BASE}/products`;
 const DEFAULT_IMAGE = `${API_BASE}/uploads/default.png`;
+
+/* ============================================================
+   STATE
+============================================================ */
+
 let products = [];
 let filteredProducts = [];
 let currentCategory = 'all';
 let searchQuery = '';
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
 function $(selector) {
   return document.querySelector(selector);
 }
+
 function $all(selector) {
   return document.querySelectorAll(selector);
 }
+
 function formatPrice(value) {
   if (value === null || value === undefined) return '';
   return `$${Number(value).toLocaleString('es-AR')}`;
 }
+
 function normalizeText(text) {
-  return text
+  return (text || '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 }
+
+/* ============================================================
+   FETCH PRODUCTS
+============================================================ */
+
 async function fetchProducts() {
   try {
     const res = await fetch(PRODUCTS_ENDPOINT);
@@ -28,19 +50,20 @@ async function fetchProducts() {
 
     const data = await res.json();
 
-    products = data.filter(p => p.active !== false);
+    // OPCIÓN A: NO filtrar por active
+    products = Array.isArray(data) ? data : [];
     filteredProducts = [...products];
 
     renderCategories();
     renderProducts();
   } catch (err) {
-    console.error('Error:', err);
+    console.error('Error cargando productos:', err);
     showError('No se pudieron cargar los productos');
   }
 }
 
 /* ============================================================
-   FILTROS
+   FILTERS
 ============================================================ */
 
 function applyFilters() {
@@ -50,7 +73,7 @@ function applyFilters() {
 
     const matchesSearch =
       normalizeText(p.name).includes(normalizeText(searchQuery)) ||
-      normalizeText(p.description || '').includes(normalizeText(searchQuery));
+      normalizeText(p.description).includes(normalizeText(searchQuery));
 
     return matchesCategory && matchesSearch;
   });
@@ -59,7 +82,7 @@ function applyFilters() {
 }
 
 /* ============================================================
-   CATEGORÍAS
+   CATEGORIES
 ============================================================ */
 
 function renderCategories() {
@@ -92,7 +115,7 @@ function renderCategories() {
 }
 
 /* ============================================================
-   RENDER PRODUCTOS
+   RENDER PRODUCTS
 ============================================================ */
 
 function renderProducts() {
@@ -125,7 +148,7 @@ function createProductCard(product) {
   };
 
   const name = document.createElement('h3');
-  name.textContent = product.name;
+  name.textContent = product.name || '';
 
   const desc = document.createElement('p');
   desc.textContent = product.description || '';
@@ -143,7 +166,7 @@ function createProductCard(product) {
 }
 
 /* ============================================================
-   BUSCADOR
+   SEARCH
 ============================================================ */
 
 function initSearch() {
@@ -157,7 +180,7 @@ function initSearch() {
 }
 
 /* ============================================================
-   ERRORES
+   ERRORS
 ============================================================ */
 
 function showError(msg) {

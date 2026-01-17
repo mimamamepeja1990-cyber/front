@@ -9,33 +9,45 @@ let FILTER = 'all';
 let CART = JSON.parse(localStorage.getItem('cart') || '[]');
 
 /* =========================
-   FETCH PRODUCTS
+   LOAD PRODUCTS (ONCE)
 ========================= */
 async function loadProducts() {
-  const res = await fetch(`${API_BASE}/products`);
-  PRODUCTS = await res.json();
-  renderProducts(PRODUCTS);
+  try {
+    catalogGrid.innerHTML = `<p class="loading">Cargando productos…</p>`;
+
+    const res = await fetch(`${API_BASE}/products`);
+    PRODUCTS = await res.json();
+
+    renderProducts(PRODUCTS);
+  } catch (err) {
+    catalogGrid.innerHTML = `<p class="error">Error al cargar productos</p>`;
+    console.error(err);
+  }
 }
 
 /* =========================
-   RENDER
+   RENDER PRODUCTS
 ========================= */
 function renderProducts(list) {
   catalogGrid.innerHTML = '';
 
   if (!list.length) {
-    catalogGrid.innerHTML = `<p style="opacity:.6">No hay productos</p>`;
+    catalogGrid.innerHTML = `<p class="empty">No hay productos disponibles</p>`;
     return;
   }
 
   list.forEach(p => {
     const card = document.createElement('article');
-    card.className = 'product-card';
-    card.dataset.category = p.category || '';
+    card.className = 'product-card fade-in';
+
+    const img = p.image_url
+      ? `${API_BASE}${p.image_url}`
+      : 'images/default.png';
 
     card.innerHTML = `
       <div class="product-image">
-        <img src="${API_BASE}${p.image_url || ''}" alt="${p.name}">
+        <img src="${img}" alt="${p.name}" loading="lazy"
+             onerror="this.src='images/default.png'">
       </div>
       <div class="product-info">
         <h3>${p.name}</h3>
@@ -89,11 +101,10 @@ searchInput.addEventListener('input', applyFilters);
 ========================= */
 function addToCart(product) {
   const found = CART.find(p => p.id === product.id);
-  if (found) {
-    found.qty++;
-  } else {
-    CART.push({ ...product, qty: 1 });
-  }
+
+  if (found) found.qty++;
+  else CART.push({ ...product, qty: 1 });
+
   saveCart();
 }
 
@@ -105,7 +116,6 @@ function saveCart() {
 function renderCart() {
   const drawer = document.getElementById('cartDrawer');
   const floating = document.getElementById('cartFloating');
-
   if (!drawer || !floating) return;
 
   drawer.innerHTML = `

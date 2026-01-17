@@ -1,5 +1,4 @@
-// Load products from API and keep in sync via WebSocket.
-const API_BASE = (location.protocol && location.protocol.startsWith('http')) ? location.origin : ''; // if opened via file://, use empty base so local relative paths work
+const API_BASE = 'https://backend-0lcs.onrender.com';
 let products = [];
 let lastCreatedId = null;
 const CART_KEY = 'catalog_cart_v1';

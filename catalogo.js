@@ -1,27 +1,31 @@
 const API_BASE = 'https://backend-0lcs.onrender.com';
 
-const catalogGrid = document.getElementById('catalogGrid');
-const searchInput = document.getElementById('search');
-const filterButtons = document.querySelectorAll('.filter-btn');
-
+/* =========================
+   STATE
+========================= */
 let PRODUCTS = [];
-let FILTER = 'all';
 let CART = JSON.parse(localStorage.getItem('cart') || '[]');
+let CURRENT_PRODUCT = null;
 
 /* =========================
-   LOAD PRODUCTS (ONCE)
+   DOM
+========================= */
+const grid = document.getElementById('catalogGrid');
+const searchInput = document.getElementById('search');
+const filterButtons = document.querySelectorAll('.filter-btn');
+const cartFloating = document.getElementById('cartFloating');
+const cartDrawer = document.getElementById('cartDrawer');
+
+/* =========================
+   FETCH
 ========================= */
 async function loadProducts() {
   try {
-    catalogGrid.innerHTML = `<p class="loading">Cargando productos…</p>`;
-
     const res = await fetch(`${API_BASE}/products`);
     PRODUCTS = await res.json();
-
     renderProducts(PRODUCTS);
-  } catch (err) {
-    catalogGrid.innerHTML = `<p class="error">Error al cargar productos</p>`;
-    console.error(err);
+  } catch (e) {
+    grid.innerHTML = `<p>Error cargando productos</p>`;
   }
 }
 
@@ -29,110 +33,167 @@ async function loadProducts() {
    RENDER PRODUCTS
 ========================= */
 function renderProducts(list) {
-  catalogGrid.innerHTML = '';
+  grid.innerHTML = '';
 
   if (!list.length) {
-    catalogGrid.innerHTML = `<p class="empty">No hay productos disponibles</p>`;
+    grid.innerHTML = `<div class="no-results">No hay productos</div>`;
     return;
   }
 
   list.forEach(p => {
     const card = document.createElement('article');
-    card.className = 'product-card fade-in';
-
-    const img = p.image_url
-      ? `${API_BASE}${p.image_url}`
-      : 'images/default.png';
+    card.className = 'product-card';
 
     card.innerHTML = `
-      <div class="product-image">
-        <img src="${img}" alt="${p.name}" loading="lazy"
-             onerror="this.src='images/default.png'">
-      </div>
+      <span class="tag">${p.category || ''}</span>
+      <img class="product-thumb" src="${API_BASE}${p.image_url || ''}" />
       <div class="product-info">
-        <h3>${p.name}</h3>
-        <p>${p.description || ''}</p>
-        <div class="product-footer">
+        <div class="product-title">${p.name}</div>
+        <div class="product-sub">${p.description || ''}</div>
+        <div class="product-actions">
           <span class="price">$${p.price}</span>
-          <button class="add-btn">Agregar</button>
+          <button class="btn btn-primary">Agregar</button>
         </div>
       </div>
     `;
 
-    card.querySelector('.add-btn').onclick = () => addToCart(p);
-    catalogGrid.appendChild(card);
+    card.querySelector('.btn').onclick = () => openModal(p);
+    grid.appendChild(card);
   });
 }
 
 /* =========================
-   FILTERS
+   MODAL
 ========================= */
-function applyFilters() {
-  let filtered = [...PRODUCTS];
+function openModal(product) {
+  CURRENT_PRODUCT = product;
 
-  if (FILTER !== 'all') {
-    filtered = filtered.filter(p => p.category === FILTER);
+  let modal = document.querySelector('.cart-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.className = 'cart-modal';
+    document.body.appendChild(modal);
   }
 
-  const q = searchInput.value.toLowerCase().trim();
-  if (q) {
-    filtered = filtered.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      (p.description || '').toLowerCase().includes(q)
-    );
-  }
+  modal.innerHTML = `
+    <div class="modal-card">
+      <div class="modal-media">
+        <img src="${API_BASE}${product.image_url || ''}">
+        <div>
+          <div class="modal-title">${product.name}</div>
+          <div class="modal-desc">${product.description || ''}</div>
+          <div class="modal-price">$${product.price}</div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <div class="quantity-control">
+          <button onclick="changeQty(-1)">−</button>
+          <span class="qty" id="modalQty">1</span>
+          <button onclick="changeQty(1)">+</button>
+        </div>
+        <button class="btn" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmAdd()">Agregar</button>
+      </div>
+    </div>
+  `;
 
-  renderProducts(filtered);
+  modal.dataset.qty = 1;
+  modal.classList.add('open');
 }
 
-filterButtons.forEach(btn => {
-  btn.onclick = () => {
-    filterButtons.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    FILTER = btn.dataset.filter;
-    applyFilters();
-  };
-});
+function changeQty(delta) {
+  const modal = document.querySelector('.cart-modal');
+  let qty = Number(modal.dataset.qty) + delta;
+  if (qty < 1) qty = 1;
+  modal.dataset.qty = qty;
+  document.getElementById('modalQty').textContent = qty;
+}
 
-searchInput.addEventListener('input', applyFilters);
+function closeModal() {
+  document.querySelector('.cart-modal')?.classList.remove('open');
+}
+
+function confirmAdd() {
+  const modal = document.querySelector('.cart-modal');
+  const qty = Number(modal.dataset.qty);
+
+  const found = CART.find(p => p.id === CURRENT_PRODUCT.id);
+  if (found) found.qty += qty;
+  else CART.push({ ...CURRENT_PRODUCT, qty });
+
+  saveCart();
+  closeModal();
+}
 
 /* =========================
    CART
 ========================= */
-function addToCart(product) {
-  const found = CART.find(p => p.id === product.id);
-
-  if (found) found.qty++;
-  else CART.push({ ...product, qty: 1 });
-
-  saveCart();
-}
-
 function saveCart() {
   localStorage.setItem('cart', JSON.stringify(CART));
   renderCart();
 }
 
 function renderCart() {
-  const drawer = document.getElementById('cartDrawer');
-  const floating = document.getElementById('cartFloating');
-  if (!drawer || !floating) return;
+  if (!cartDrawer) return;
 
-  drawer.innerHTML = `
-    <h3>Carrito</h3>
-    ${CART.map(p => `
-      <div class="cart-item">
-        <span>${p.name} x${p.qty}</span>
-        <strong>$${p.price * p.qty}</strong>
-      </div>
-    `).join('')}
-    <hr>
-    <strong>Total: $${CART.reduce((a,p)=>a+p.price*p.qty,0)}</strong>
+  if (!CART.length) {
+    cartDrawer.innerHTML = `<div class="empty">Carrito vacío</div>`;
+    cartFloating.classList.add('hidden');
+    return;
+  }
+
+  cartFloating.classList.remove('hidden');
+  cartFloating.innerHTML = `<span class="cart-badge">${CART.reduce((a,p)=>a+p.qty,0)}</span>🛒`;
+
+  cartDrawer.innerHTML = `
+    <div class="cart-head">
+      <div>Carrito</div>
+      <button class="btn secondary" onclick="toggleCart()">Cerrar</button>
+    </div>
+    <div class="cart-items">
+      ${CART.map(p => `
+        <div class="cart-item">
+          <img src="${API_BASE}${p.image_url || ''}">
+          <div class="cart-item-info">
+            <div class="cart-item-title">${p.name}</div>
+            <div class="quantity-control">
+              <button onclick="updateQty(${p.id},-1)">−</button>
+              <span class="qty">${p.qty}</span>
+              <button onclick="updateQty(${p.id},1)">+</button>
+            </div>
+          </div>
+          <div class="cart-item-price">$${p.price * p.qty}</div>
+        </div>
+      `).join('')}
+    </div>
+    <div class="cart-footer">
+      <strong>Total: $${CART.reduce((a,p)=>a+p.price*p.qty,0)}</strong>
+    </div>
   `;
-
-  floating.textContent = CART.reduce((a,p)=>a+p.qty,0);
-  floating.style.display = CART.length ? 'flex' : 'none';
 }
+
+function updateQty(id, delta) {
+  const p = CART.find(p => p.id === id);
+  if (!p) return;
+  p.qty += delta;
+  if (p.qty <= 0) CART = CART.filter(x => x.id !== id);
+  saveCart();
+}
+
+function toggleCart() {
+  cartDrawer.classList.toggle('open');
+}
+
+/* =========================
+   FILTERS
+========================= */
+searchInput?.addEventListener('input', e => {
+  const q = e.target.value.toLowerCase();
+  renderProducts(PRODUCTS.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    (p.description || '').toLowerCase().includes(q)
+  ));
+});
 
 /* =========================
    INIT
